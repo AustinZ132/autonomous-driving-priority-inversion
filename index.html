@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Interactive RTOS priority inversion simulator for an autonomous driving task model.">
+    <title>Priority Inversion Lab</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+
+    <header class="topbar" aria-label="Application header">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span>
+        </div>
+        <div>
+          <p class="eyebrow">RTOS simulator</p>
+          <p class="brand-title">Priority Inversion Lab</p>
+        </div>
+      </div>
+
+      <nav class="topbar-meta" aria-label="Presentation context">
+        <span>Threads</span>
+        <span>Scheduling</span>
+        <span>Synchronization</span>
+      </nav>
+    </header>
+
+    <main id="main" class="app-shell">
+      <section class="control-strip" aria-labelledby="lab-title">
+        <div class="intro-copy">
+          <p class="eyebrow">Autonomous driving task model</p>
+          <h1 id="lab-title">AEB waits for Lock S while the scheduler keeps moving.</h1>
+          <p>
+            Adjust the task arrivals and run the scheduler. The lab shows CPU ownership,
+            blocked queue movement, lock ownership, and whether AEB meets its deadline.
+          </p>
+        </div>
+
+        <div class="status-board" aria-label="Live simulation metrics">
+          <div class="metric-card">
+            <span class="metric-label">AEB deadline</span>
+            <strong id="deadlineMetric">t=6</strong>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">H wait</span>
+            <strong id="waitMetric">0 ticks</strong>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Lock owner</span>
+            <strong id="lockMetric">L</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace-grid" aria-label="Priority inversion simulation workspace">
+        <aside class="panel controls-panel" aria-labelledby="controls-title">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Experiment</p>
+              <h2 id="controls-title">Scenario controls</h2>
+            </div>
+            <button class="icon-button" id="resetButton" type="button" aria-label="Reset scenario">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                <path d="M3 4v6h6"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="segmented" role="group" aria-label="Simulation presets">
+            <button class="segment is-active" type="button" data-preset="inversion">Inversion</button>
+            <button class="segment" type="button" data-preset="inheritance">Inheritance</button>
+            <button class="segment" type="button" data-preset="baseline">Baseline</button>
+          </div>
+
+          <div class="switch-list">
+            <label class="switch-row">
+              <span>
+                <strong>Priority inheritance</strong>
+                <small>Boost L when H is blocked by L.</small>
+              </span>
+              <input id="piToggle" type="checkbox">
+            </label>
+            <label class="switch-row">
+              <span>
+                <strong>Task M enabled</strong>
+                <small>Infotainment can preempt the lock holder.</small>
+              </span>
+              <input id="taskMToggle" type="checkbox" checked>
+            </label>
+          </div>
+
+          <div class="slider-group">
+            <label for="lWork">
+              <span>L critical section</span>
+              <strong><output id="lWorkValue">4</output> ticks</strong>
+            </label>
+            <input id="lWork" type="range" min="2" max="8" value="4">
+          </div>
+
+          <div class="slider-group">
+            <label for="hArrival">
+              <span>H arrival</span>
+              <strong>t=<output id="hArrivalValue">2</output></strong>
+            </label>
+            <input id="hArrival" type="range" min="1" max="6" value="2">
+          </div>
+
+          <div class="slider-group">
+            <label for="mArrival">
+              <span>M arrival</span>
+              <strong>t=<output id="mArrivalValue">3</output></strong>
+            </label>
+            <input id="mArrival" type="range" min="1" max="8" value="3">
+          </div>
+
+          <div class="slider-group">
+            <label for="mBurst">
+              <span>M CPU burst</span>
+              <strong><output id="mBurstValue">5</output> ticks</strong>
+            </label>
+            <input id="mBurst" type="range" min="1" max="8" value="5">
+          </div>
+
+          <div class="slider-group">
+            <label for="hDeadline">
+              <span>H deadline</span>
+              <strong>t=<output id="hDeadlineValue">6</output></strong>
+            </label>
+            <input id="hDeadline" type="range" min="3" max="10" value="6">
+          </div>
+
+          <div class="button-row">
+            <button class="primary-button" id="runButton" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 5v14l11-7z"></path>
+              </svg>
+              Run
+            </button>
+            <button class="secondary-button" id="stepButton" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 5v14"></path>
+                <path d="M11 6l7 6-7 6z"></path>
+              </svg>
+              Step
+            </button>
+          </div>
+        </aside>
+
+        <section class="main-stage" aria-label="Live scheduler visualization">
+          <div class="panel stage-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Live scheduler</p>
+                <h2>CPU, queues, and Lock S</h2>
+              </div>
+              <div class="run-state" id="runState" aria-live="polite">Ready</div>
+            </div>
+
+            <div class="scheduler-canvas" id="schedulerCanvas">
+              <svg class="flow-lines" viewBox="0 0 840 320" aria-hidden="true" preserveAspectRatio="none">
+                <path class="flow flow-ready" d="M126 90 C252 52 342 86 418 138"></path>
+                <path class="flow flow-lock" d="M486 154 C568 116 622 88 710 92"></path>
+                <path class="flow flow-blocked" d="M420 188 C316 256 220 252 122 222"></path>
+                <path class="flow flow-release" d="M710 118 C600 232 508 242 440 204"></path>
+              </svg>
+
+              <div class="queue-stack ready-stack">
+                <span class="stack-label">Ready queue</span>
+                <div class="queue-items" id="readyQueue"></div>
+              </div>
+
+              <div class="cpu-core" id="cpuCore">
+                <span class="stack-label">CPU</span>
+                <strong id="cpuTask">Idle</strong>
+                <small id="cpuCaption">Scheduler waiting</small>
+              </div>
+
+              <div class="lock-card" id="lockCard">
+                <span class="stack-label">Lock S</span>
+                <strong id="lockOwner">L</strong>
+                <small>LiDAR data mutex</small>
+              </div>
+
+              <div class="queue-stack blocked-stack">
+                <span class="stack-label">Blocked queue</span>
+                <div class="queue-items" id="blockedQueue"></div>
+              </div>
+
+              <div class="task-node node-h" id="nodeH">
+                <span>H</span>
+                <strong>AEB</strong>
+                <small>High priority</small>
+              </div>
+
+              <div class="task-node node-m" id="nodeM">
+                <span>M</span>
+                <strong>Infotainment</strong>
+                <small>Medium priority</small>
+              </div>
+
+              <div class="task-node node-l" id="nodeL">
+                <span>L</span>
+                <strong>Logging</strong>
+                <small>Low priority</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel timeline-panel">
+            <div class="panel-header compact">
+              <div>
+                <p class="eyebrow">Discrete time simulation</p>
+                <h2>Execution timeline</h2>
+              </div>
+              <div class="legend" aria-label="Timeline legend">
+                <span><i class="legend-dot h"></i>H</span>
+                <span><i class="legend-dot m"></i>M</span>
+                <span><i class="legend-dot l"></i>L</span>
+                <span><i class="legend-dot blocked"></i>Blocked</span>
+              </div>
+            </div>
+
+            <p class="sr-only" id="timelineSummary" aria-live="polite"></p>
+            <div class="timeline-grid" id="timelineGrid" role="table" aria-label="CPU timeline and task states"></div>
+          </div>
+        </section>
+
+        <aside class="panel analysis-panel" aria-labelledby="analysis-title">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Analysis</p>
+              <h2 id="analysis-title">Result trace</h2>
+            </div>
+          </div>
+
+          <div class="outcome-card" id="outcomeCard">
+            <span class="outcome-kicker">Deadline status</span>
+            <strong id="outcomeTitle">Run the experiment</strong>
+            <p id="outcomeText">The scheduler trace will explain why H runs on time or misses its deadline.</p>
+          </div>
+
+          <div class="metric-list" aria-label="Computed metrics">
+            <div>
+              <span>H starts at</span>
+              <strong id="hStartMetric">--</strong>
+            </div>
+            <div>
+              <span>H blocked for</span>
+              <strong id="hBlockedMetric">--</strong>
+            </div>
+            <div>
+              <span>L releases S at</span>
+              <strong id="releaseMetric">--</strong>
+            </div>
+            <div>
+              <span>Inversion window</span>
+              <strong id="inversionMetric">--</strong>
+            </div>
+          </div>
+
+          <div class="comparison-card">
+            <div class="panel-header compact">
+              <div>
+                <p class="eyebrow">Current parameters</p>
+                <h3>Without PI vs With PI</h3>
+              </div>
+            </div>
+            <div class="comparison-grid" id="comparisonGrid" aria-label="Simulation result comparison"></div>
+          </div>
+
+          <div class="event-log" aria-label="Event log">
+            <div class="panel-header compact">
+              <div>
+                <p class="eyebrow">Trace</p>
+                <h3>Event log</h3>
+              </div>
+            </div>
+            <ol id="eventLog" aria-live="polite"></ol>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
