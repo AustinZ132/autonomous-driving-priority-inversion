@@ -175,6 +175,12 @@ svg {
   padding: 6px 10px;
 }
 
+.topbar-meta .project-badge {
+  border-color: rgba(23, 23, 23, 0.18);
+  background: var(--ink);
+  color: var(--on-primary);
+}
+
 .app-shell {
   width: min(100%, 1440px);
   margin: 0 auto;
